@@ -12,7 +12,7 @@ import planBuildModes from "./index.ts";
 import { COMPLETION_GUIDANCE } from "./prompts.ts";
 import { createPlanExecution } from "./plan-execution.ts";
 import { SOURCE_TRANSFER_NOTICE } from "./handoff.ts";
-import { decodePlanLifecycle, makePlanPath, PLAN_EXIT_APPROVE_CHOICE, PLAN_EXIT_FRESH_CHOICE, PLAN_EXIT_STAY_CHOICE, PLAN_ACTION_ANNOUNCEMENTS, planActionTone } from "./utils.ts";
+import { decodePlanLifecycle, inspectPlanFile, makePlanPath, PLAN_EXIT_APPROVE_CHOICE, PLAN_EXIT_FRESH_CHOICE, PLAN_EXIT_STAY_CHOICE, PLAN_ACTION_ANNOUNCEMENTS, planActionTone } from "./utils.ts";
 
 function harness(dir: string, entries: any[] = [], sessionId = "session", initialActive = ["read", "write", "edit", "bash"]) {
 	process.env.PI_CODING_AGENT_DIR = dir;
@@ -189,6 +189,128 @@ test("startup mode follows the session record, then the CLI flag, then defaultMo
 		await fallback.event("session_start", { reason: "startup" });
 		assert.ok(!startedInPlan(fallback), "no record, no flag, and no setting falls back to Build");
 		await fallback.event("session_shutdown");
+	} finally { fs.rmSync(dir, { recursive: true, force: true }); if (previous === undefined) delete process.env.PI_CODING_AGENT_DIR; else process.env.PI_CODING_AGENT_DIR = previous; }
+});
+
+test("Ask mode removes file mutators, restores them on exit, and preserves host tool choices", async () => {
+	const dir = fs.mkdtempSync(path.join(os.tmpdir(), "plan-ask-tools-"));
+	const previous = process.env.PI_CODING_AGENT_DIR;
+	const mutators = ["write", "edit"];
+	const hasMutators = (h: ReturnType<typeof harness>) => mutators.every((name) => h.active().includes(name));
+	try {
+		const h = harness(dir);
+		await h.event("session_start", { reason: "startup" });
+		assert.ok(hasMutators(h), "Build keeps the host's file mutators");
+		await h.commands.get("ask").handler("", h.ctx);
+		assert.ok(!hasMutators(h), "Ask removes file mutators from the active set");
+		assert.ok(!h.active().includes("plan_task"), "Ask exposes no plan lifecycle tool");
+		assert.ok(h.active().includes("read") && h.active().includes("bash"), "read-only exploration and shell stay available");
+		await h.commands.get("build").handler("", h.ctx);
+		assert.ok(hasMutators(h), "leaving Ask restores exactly the mutators it removed");
+		await h.commands.get("ask").handler("", h.ctx);
+		await h.event("session_compact", {});
+		assert.ok(!hasMutators(h), "a mode refresh while Ask is active must not resurrect mutators");
+		await h.commands.get("build").handler("", h.ctx);
+		assert.ok(hasMutators(h), "mutators return after a refresh round trip");
+		// A host removal made before Ask is a host choice; Ask must not undo it.
+		h.setActive(["read", "bash"]);
+		await h.commands.get("ask").handler("", h.ctx);
+		await h.commands.get("build").handler("", h.ctx);
+		assert.ok(!hasMutators(h), "Ask never restores tools the host had already removed");
+		// Unrelated host tools survive the round trip in both directions.
+		h.seedActiveTool("grep");
+		await h.commands.get("ask").handler("", h.ctx);
+		assert.ok(h.active().includes("grep"), "Ask keeps unrelated host tools active");
+		assert.ok(!h.active().includes("write"));
+		await h.commands.get("build").handler("", h.ctx);
+		assert.ok(h.active().includes("grep") && !h.active().includes("write"), "host additions and host removals both survive the Ask round trip");
+		await h.event("session_shutdown");
+	} finally { fs.rmSync(dir, { recursive: true, force: true }); if (previous === undefined) delete process.env.PI_CODING_AGENT_DIR; else process.env.PI_CODING_AGENT_DIR = previous; }
+});
+
+test("Ask mode blocks mutations and lifecycle calls while answering read-only questions", async () => {
+	const dir = fs.mkdtempSync(path.join(os.tmpdir(), "plan-ask-guard-"));
+	const previous = process.env.PI_CODING_AGENT_DIR;
+	try {
+		const h = harness(dir);
+		await h.event("session_start", { reason: "startup" });
+		await h.commands.get("ask").handler("", h.ctx);
+		const mutation = await h.event("tool_call", { toolName: "write", toolCallId: "call", input: { path: path.join(dir, "src", "app.ts"), content: "x" } });
+		assert.equal(mutation.block, true, "Ask blocks file mutations even if a host re-enables the tool");
+		assert.match(mutation.reason, /Ask mode is read-only/);
+		for (const toolName of ["plan_task", "plan_exit", "plan_finish", "plan_complete"]) {
+			const blocked = await h.event("tool_call", { toolName, toolCallId: "call", input: {} });
+			assert.equal(blocked.block, true, `${toolName} must be blocked in Ask`);
+			assert.match(blocked.reason, /no plan lifecycle/);
+		}
+		assert.equal(await h.event("tool_call", { toolName: "bash", toolCallId: "call", input: { command: "git log -1" } }), undefined, "read-only shell commands stay available");
+		const messages = await h.prompt("What does this repository do?");
+		const context = messages.find((message: any) => message.customType === "pi-plan-build-task")?.content ?? "";
+		assert.match(context, /Ask mode is active/);
+		assert.match(context, /no durable artifacts/);
+		assert.doesNotMatch(context, /Implementation Steps/);
+		assert.equal(h.state().collection.attached, null, "Ask creates no plan state or plan file");
+		await h.event("session_shutdown");
+	} finally { fs.rmSync(dir, { recursive: true, force: true }); if (previous === undefined) delete process.env.PI_CODING_AGENT_DIR; else process.env.PI_CODING_AGENT_DIR = previous; }
+});
+
+test("Ask reports an open plan as read-only context and refuses lifecycle commands", async () => {
+	const dir = fs.mkdtempSync(path.join(os.tmpdir(), "plan-ask-open-plan-"));
+	const previous = process.env.PI_CODING_AGENT_DIR;
+	try {
+		const h = harness(dir);
+		await h.event("session_start", { reason: "startup" });
+		await h.command("");
+		await h.command("new");
+		await h.tool("plan_task", { action: "update", title: "Ship Ask mode", scope: "Read-only conversational mode", expectedAttached: 1 });
+		const planPath = h.record().plan.sequence && makePlanPath(path.join(dir, "plans"), "session", h.record().plan.sequence);
+		await h.command("build");
+		await h.commands.get("ask").handler("", h.ctx);
+		assert.ok(!h.active().includes("plan_task"), "an open plan grants no lifecycle tool in Ask");
+		const messages = await h.prompt("Where does the plan stand?");
+		const context = messages.find((message: any) => message.customType === "pi-plan-build-task")?.content ?? "";
+		assert.match(context, /read-only reference/);
+		assert.match(context, /Ship Ask mode/);
+		assert.match(context, /Ask mode is active/);
+		assert.equal(inspectPlanFile(planPath), "absent", "Ask must not write the reserved plan file");
+		await h.command("done");
+		assert.ok(h.events.some((event: any) => event.kind === "notify" && event.text.includes("Switch to Build mode")), "/plan done refuses to complete work from Ask");
+		await h.command("new");
+		assert.ok(h.events.some((event: any) => event.kind === "notify" && event.text.includes("Complete or explicitly abandon")), "/plan new refuses to replace the open plan from Ask");
+		assert.equal(h.state().collection.attached, 1, "Ask changes no plan state");
+		await h.event("session_shutdown");
+	} finally { fs.rmSync(dir, { recursive: true, force: true }); if (previous === undefined) delete process.env.PI_CODING_AGENT_DIR; else process.env.PI_CODING_AGENT_DIR = previous; }
+});
+
+test("--ask starts a session read-only and the Ask default mode persists", async () => {
+	const dir = fs.mkdtempSync(path.join(os.tmpdir(), "plan-ask-flag-"));
+	const previous = process.env.PI_CODING_AGENT_DIR;
+	// Neither Plan nor Ask activates a mutator, so Ask is identified by the absent lifecycle tools too.
+	const startedInAsk = (h: ReturnType<typeof harness>) => !h.active().includes("write") && !h.active().includes("plan_exit") && !h.active().includes("plan_task") && h.active().includes("bash");
+	// Ask injects its read-only context even with no plan; Build with no plan injects nothing.
+	const asksReadOnly = async (h: ReturnType<typeof harness>) => (await h.prompt("hello")).some((message: any) => message.customType === "pi-plan-build-task" && message.content.includes("Ask mode is active"));
+	try {
+		const flag = harness(dir);
+		flag.setFlag("ask", true);
+		await flag.event("session_start", { reason: "startup" });
+		assert.deepEqual(flag.flags.get("ask"), { description: "Start in read-only Ask mode", type: "boolean", default: false });
+		assert.ok(startedInAsk(flag), "--ask starts read-only");
+		assert.equal(await asksReadOnly(flag), true, "the session prompt is constrained to read-only Ask");
+		await flag.event("session_shutdown");
+
+		fs.writeFileSync(path.join(dir, "pi-plan-build.json"), JSON.stringify({ defaultMode: "ask" }));
+		const configured = harness(dir);
+		await configured.event("session_start", { reason: "startup" });
+		assert.ok(startedInAsk(configured), "defaultMode ask is honored for new sessions");
+		assert.equal(await asksReadOnly(configured), true);
+		await configured.event("session_shutdown");
+
+		const overridden = harness(dir);
+		overridden.setFlag("build", true);
+		await overridden.event("session_start", { reason: "startup" });
+		assert.ok(overridden.active().includes("write"), "--build overrides a default Ask mode");
+		assert.equal(await asksReadOnly(overridden), false, "Build keeps its ordinary prompt");
+		await overridden.event("session_shutdown");
 	} finally { fs.rmSync(dir, { recursive: true, force: true }); if (previous === undefined) delete process.env.PI_CODING_AGENT_DIR; else process.env.PI_CODING_AGENT_DIR = previous; }
 });
 

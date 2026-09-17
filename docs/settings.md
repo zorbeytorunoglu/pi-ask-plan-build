@@ -4,7 +4,7 @@
 
 ## Default startup mode
 
-Build is the default startup mode for new sessions. To start new sessions in Plan instead, choose **Default mode → Plan** in `/plan-settings`, or set `defaultMode` directly:
+Build is the default startup mode for new sessions. To start new sessions in Plan or Ask instead, choose **Default mode → Plan** or **Default mode → Ask (read-only)** in `/plan-settings`, or set `defaultMode` directly:
 
 ```json
 {
@@ -12,12 +12,12 @@ Build is the default startup mode for new sessions. To start new sessions in Pla
 }
 ```
 
-Only `"build"` and `"plan"` are accepted; any other value warns and falls back to Build. **Default mode** applies to sessions that have no mode recorded on their branch, so it takes effect immediately for the next session without `/reload` and never changes the current session's mode. Override it for a single run with `pi --plan` or `pi --build`.
+Only `"build"`, `"plan"`, and `"ask"` are accepted; any other value warns and falls back to Build. **Default mode** applies to sessions that have no mode recorded on their branch, so it takes effect immediately for the next session without `/reload` and never changes the current session's mode. Override it for a single run with `pi --plan`, `pi --build`, or `pi --ask`.
 
 Startup mode resolves in this order:
 
 1. The mode recorded on the session branch.
-2. The `--plan` / `--build` CLI flag (`--plan` wins if both are passed).
+2. The `--plan` / `--build` / `--ask` CLI flag (`--plan` wins over `--build`, which wins over `--ask`, if several are passed).
 3. The `defaultMode` setting.
 4. Build.
 
@@ -25,7 +25,7 @@ Restoring or forking a session therefore keeps its recorded mode, and `/reload` 
 
 ## Per-mode model and thinking selection
 
-In `/plan-settings`, choose **Per-mode model/thinking → On** to remember separate Plan and Build selections. This is **off by default**. Continue using Pi's normal model picker and thinking controls in each mode; switching modes restores that mode's last pair.
+In `/plan-settings`, choose **Per-mode model/thinking → On** to remember separate Ask, Plan, and Build selections. This is **off by default**. Continue using Pi's normal model picker and thinking controls in each mode; switching modes restores that mode's last pair.
 
 Enabling seeds any missing pair from the current model/thinking level. Disabling leaves the current selection unchanged and retains saved pairs for later use. Preferences are global in `pi-plan-build.json` under `modeSelections`; session restoration preserves the session's actual selection. Direct configuration edits require `/reload`.
 
@@ -36,7 +36,8 @@ Manual mode changes during a run defer automatic model switching until that run 
   "modeSelections": {
     "enabled": true,
     "plan": { "provider": "your-provider", "modelId": "your-plan-model", "thinkingLevel": "high" },
-    "build": { "provider": "your-provider", "modelId": "your-build-model", "thinkingLevel": "medium" }
+    "build": { "provider": "your-provider", "modelId": "your-build-model", "thinkingLevel": "medium" },
+    "ask": { "provider": "your-provider", "modelId": "your-ask-model", "thinkingLevel": "low" }
   }
 }
 ```
@@ -72,9 +73,11 @@ Pi Plan Build reads `~/.pi/agent/pi-plan-build.json` (or `$PI_CODING_AGENT_DIR/p
 }
 ```
 
+Both shortcuts cycle Build → Plan → Ask → Build. `/ask`, `/plan`, and `/build` select a mode directly.
+
 Composer-outline plan titles are **on by default**. Choose **Plan title → Off** in `/plan-settings` to hide them immediately, or **On (default)** to show them again; changes save and apply without reloading extensions. If you edit `"showPlanTitle": true` directly in `pi-plan-build.json`, run `/reload` to load that file change. The preference also controls fallback status titles. Enabled composer titles use **regular-weight, warning-colored text with their original capitalization**, right-aligned on the top outline with one blank cell before the corner. Saved titles, other title displays, validation labels, and user input keep their original lettering. Agents are guided to write action-led titles: one imperative phrase naming the action, its object, and at most a short goal (for example `Add color to the composer`). Additional requirements and detail belong in scope. The former `smallCapsPlanTitle` setting is ignored and can be removed from existing configuration files.
 
-Each action accepts one Pi key string or an array. `[]` disables it; omitted actions retain defaults. `toggleMode` uses Pi’s global shortcut conflict rules. `toggleModeInEditor` requires the custom composer and yields to open autocomplete. For example, use `"toggleMode": "ctrl+alt+m"` and `"toggleModeInEditor": ["f6"]`.
+Each action accepts one Pi key string or an array. `[]` disables it; omitted actions retain defaults. `toggleMode` uses Pi’s global shortcut conflict rules. `toggleModeInEditor` requires the custom composer and yields to open autocomplete. Both cycle Build → Plan → Ask → Build, wrapping at the end. For example, use `"toggleMode": "ctrl+alt+m"` and `"toggleModeInEditor": ["f6"]`.
 
 **Tab tradeoff:** the default replaces Pi’s closed-menu file-completion trigger (`Review READ` + Tab). Choose **Alt+M only** to restore that trigger. Never put bare Tab in global shortcuts: it would intercept open-menu completion too. Avoid assigning a key to both actions if editor-only autocomplete protection matters.
 

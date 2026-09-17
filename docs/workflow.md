@@ -12,6 +12,14 @@
 
 One task retains its file, identity, decisions, and progress through mode changes and revisions. Approval and idleness never imply completion. Before starting another plan, complete the current plan or explicitly abandon it. Abandonment preserves the file but never implies success and cannot be resumed. A successful clean-session handoff is different: it transfers ownership, detaches the source record into history, and keeps only the destination copy open. **Pausing step execution** is separate: it retains the current plan and progress but permits no implementation until execution is resumed.
 
+## Ask mode
+
+**Ask** is the read-only conversational mode: `/ask`, `Alt+M` cycling past Plan, or `pi --ask` for one run. Use it for questions, explanations, and investigation when you want no possibility of a write.
+
+Ask removes the recognized file mutators (`edit`, `write`, `replace`, `insert`, `undo_last_change`) from the active tool set, so the model cannot call them at all, and additionally blocks those calls plus every plan lifecycle tool at call time. `bash`/`powershell` stay active under read-only guidance, because Pi has no sandbox and answering questions often needs `git log`, a test run, or a build inspection. Read-only shell is guidance, not enforcement: treat Ask as a tool-surface guarantee, not a filesystem one, and see [Permission and verification limits](#permission-and-verification-limits).
+
+Ask has **no plan lifecycle**. `plan_task`, `plan_exit`, `plan_finish`, and `plan_complete` are inactive, no plan file is writable, and Ask produces no durable artifacts. An open plan is still injected as read-only context so you can ask where the work stands; its progress and outcome cannot change. If you ask for a change in Ask mode, the agent explains what the change would involve and asks you to switch to Plan or Build, mirroring how the agent cannot route a Build request into Plan. Only you switch modes.
+
 ## Task identity, files, and boundaries
 
 Canonical plans live at `~/.pi/agent/plans/<session-id>-001.md`, `-002.md`, etc. Existing unnumbered `<session-id>.md` files remain usable without renaming. Reserved paths are for future writing, not proof that a file exists. Context distinguishes saved, absent, and unavailable files. An unavailable file never justifies discarding its task.
@@ -96,6 +104,8 @@ See [UI internals](internals.md#presentation-and-ui-compatibility) for sidebar o
 ## Permission and verification limits
 
 Plan guidance allows only observation, analysis, discussion, and planning. Recognized path-bearing editor calls (`edit`, `write`, `replace`, `insert`, and `undo_last_change`) may target **only the attached canonical plan path**, and only finalization or explicitly requested revision is appropriate. Recognized pathless editor calls are blocked because their target cannot be verified. Other tools remain visible for exploration. Bash/powershell are not sandboxed in ordinary Plan mode: the read-only requirement is model guidance, not arbitrary shell classification.
+
+Ask removes the recognized file mutators from the active set entirely, so they cannot be called, and blocks them plus plan lifecycle tools at call time as a second layer. Bash/powershell and unknown tools remain available under the same read-only guidance as Plan, and Ask never writes plan Markdown. Its guarantee is therefore the active tool surface plus call-time guards, not a filesystem sandbox.
 
 Build keeps tracked Markdown read-only when a recognized editor exposes its target; completion and later user-approved scope changes belong in extension state. To revise and review the attached Markdown itself, return to Plan mode. Pathless editors remain available for ordinary approved implementation, but Pi provides no mutation metadata or target resolver with which Plan Build could inspect another extension's private anchor state. Plan Build preserves the host's live editor selection rather than force-enabling built-in tools. Guarded revisions of unimplemented steps remain supported. See [Permission boundary](internals.md#permission-boundary) for path normalization, symlink handling, and enforcement limits.
 

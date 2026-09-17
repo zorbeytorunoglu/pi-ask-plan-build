@@ -1,10 +1,11 @@
 # Pi Plan & Build
 
-**Plan safely, approve explicitly, then implement here or in a clean session.**
+**Ask or plan safely, approve explicitly, then implement here or in a clean session.**
 
 A [Pi coding agent](https://github.com/earendil-works/pi-mono) extension that separates planning from implementation without making every small fix a formal project.
 
-- Persistent **Plan/Build** modes and one current unfinished plan.
+- Persistent **Ask/Plan/Build** modes and one current unfinished plan.
+- **Ask** answers questions read-only: file mutators and plan lifecycle tools are removed from the active set, so it cannot change code or plan files.
 - Complete plan review before implementation, with a clean-session option.
 - Optional step-by-step execution—with or without a sidebar.
 - Interactive questions, explicit completion, and outstanding validation tracking.
@@ -27,10 +28,12 @@ Restart Pi or run `/reload`. Do not load multiple npm/Git/local copies simultane
 ## Quick start
 
 1. Start in **Build** for ordinary coding and discussion. Small fixes need no plan.
-2. Select **Plan** with `/plan`, `Alt+M`, or editor `Tab`. Explore and discuss; entering Plan does not create a task or write a file. Plan entry is user-controlled—the agent cannot route a Build request into Plan.
+2. Select **Plan** with `/plan`, or cycle to it with `Alt+M` or editor `Tab`. Explore and discuss; entering Plan does not create a task or write a file. Plan entry is user-controlled—the agent cannot route a Build request into Plan.
 3. Ask for a plan or accept a concrete proposed change. The agent investigates, saves the plan, and presents it for review. Accepting scope does **not** authorize implementation.
 4. Choose **implement here**, **start fresh and implement**, or **step by step**. Choose **stay in Plan** or press Escape to stop and wait.
 5. After implementation and required checks, the agent records completion. Essential user-only validation keeps the plan open with clear instructions; optional feedback does not block completion.
+
+Select **Ask** with `/ask`, by cycling `Alt+M` past Plan, or with `pi --ask` for a question-only session. Ask answers and investigates with no file editors and no plan lifecycle tools, so it cannot create a plan, write one, or change code. Ask your question there, then switch to Plan only when you want the deliverable.
 
 One plan stays current through discussion, mode changes, and revisions. Complete it or explicitly abandon it before starting another. Abandonment preserves the file but does not imply success or allow resumption. A successful clean-session handoff instead marks the source record transferred and moves it to history; only the destination copy remains open.
 
@@ -40,11 +43,12 @@ One plan stays current through discussion, mode changes, and revisions. Complete
 
 | Action | Purpose |
 | --- | --- |
-| `Alt+M` | Toggle Plan/Build globally |
-| `Tab` | Toggle in the custom composer when autocomplete is closed; accept a suggestion when open |
-| `/plan` / `/build` | Select a mode |
+| `Alt+M` | Cycle Build, Plan, and Ask globally |
+| `Tab` | Cycle in the custom composer when autocomplete is closed; accept a suggestion when open |
+| `/plan` / `/build` / `/ask` | Select a mode |
 | `pi --plan` | Start in Plan for one run |
 | `pi --build` | Start in Build for one run |
+| `pi --ask` | Start in read-only Ask for one run |
 | `/plan new` | Start a plan when none is unfinished |
 | `/plan list` | Show the current plan's brief status |
 | `/plan show` | Read the current plan, progress, and outstanding validation |
@@ -62,10 +66,10 @@ Open `/plan-settings`:
 
 | Setting | Default | Behavior |
 | --- | --- | --- |
-| Default mode | Build | Startup mode for new sessions; the current session is unchanged |
+| Default mode | Build | Startup mode for new sessions (Build, Plan, or Ask); the current session is unchanged |
 | Shortcuts | Tab + Alt+M | Open its submenu to choose Alt+M only, disable shortcuts, or configure custom keys; reload to apply |
 | Plan title | On | Show the current task's title in the composer; applies immediately |
-| Per-mode model/thinking | Off | Remember separate Plan and Build selections; applies immediately |
+| Per-mode model/thinking | Off | Remember separate Ask, Plan, and Build selections; applies immediately |
 | Question tool | On | Provide this extension's structured `question` tool; off leaves a `question` tool from another extension alone; reload to apply |
 
 When per-mode memory is enabled, use Pi's normal model picker and thinking controls in each mode. Switching modes restores that mode's last pair. Disabling leaves the current selection unchanged.
@@ -101,6 +105,7 @@ The optional sidebar needs fullscreen TUI and at least **132 columns**. Step exe
 ## Important limits
 
 - **Plan is not a sandbox.** Path-bearing `edit`, `write`, `replace`, `insert`, and `undo_last_change` calls are restricted to the attached canonical plan file; recognized pathless editors are blocked because their target cannot be verified. Bash/powershell and unknown tools still rely on read-only guidance—not comprehensive mutation enforcement.
+- **Ask is read-only at the tool surface, not a sandbox.** Ask removes the recognized file mutators from the active set, so they cannot be called, and blocks them plus plan lifecycle tools at call time. `bash`/`powershell` stay active under read-only guidance because Pi has no sandbox and read-only inspection needs them; unknown or private tools from other extensions stay outside any enforceable boundary. Ask writes no plans and produces no durable artifacts.
 - **Build protects tracked plan files** from recognized path-bearing editor calls. Opaque editors that resolve targets through private extension state cannot be preflighted without Pi capability metadata. Completion is recorded separately; guarded step-instruction revisions remain supported.
 - **Host tool choices are preserved.** Mode refreshes add only Plan Build’s own tools; they do not restore stale runtime removals or force-enable built-in editors replaced by another extension.
 - **Manual mid-run mode changes are deferred.** The composer shows the selected mode while the current run retains its effective permissions. Automatic per-mode model switching is deferred too.

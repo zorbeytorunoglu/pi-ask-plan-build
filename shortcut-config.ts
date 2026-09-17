@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import type { KeyId } from "@earendil-works/pi-tui";
-import type { Mode } from "./utils.ts";
+import { isMode, type Mode } from "./utils.ts";
 
 export const SHORTCUT_CONFIG_FILE = "pi-plan-build.json";
 
@@ -129,8 +129,8 @@ function parseShortcuts(value: unknown): {
 
 function parseDefaultMode(value: unknown): { defaultMode: Mode; warning?: string } {
 	if (value === undefined) return { defaultMode: DEFAULT_MODE };
-	if (value === "build" || value === "plan") return { defaultMode: value };
-	return { defaultMode: DEFAULT_MODE, warning: 'defaultMode must be "build" or "plan"' };
+	if (isMode(value)) return { defaultMode: value };
+	return { defaultMode: DEFAULT_MODE, warning: 'defaultMode must be "build", "plan", or "ask"' };
 }
 
 export function parseShortcutConfig(value: unknown): Omit<LoadedShortcutConfig, "path"> {
@@ -166,7 +166,7 @@ export function saveQuestionTool(agentDir: string, enabled: boolean): string {
 }
 
 export function saveDefaultMode(agentDir: string, mode: Mode): string {
-	if (mode !== "build" && mode !== "plan") throw new Error("The default mode must be build or plan");
+	if (!isMode(mode)) throw new Error("The default mode must be build, plan, or ask");
 	return saveSettings(agentDir, (document) => ({ ...document, defaultMode: mode }));
 }
 

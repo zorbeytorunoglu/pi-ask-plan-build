@@ -10,6 +10,33 @@ test("mode settings validate and default off", () => {
 	for (const value of [null, [], true, { enabled: "yes" }, { enabled: true, plan: { provider: "p", modelId: "m", thinkingLevel: "wrong" } }]) assert.throws(() => parseModeSelections(value));
 });
 
+test("ask participates in per-mode selections like plan and build", async () => {
+	const pair = (modelId: string) => ({ provider: "p", modelId, thinkingLevel: "low" });
+	assert.deepEqual(parseModeSelections({ enabled: true, ask: pair("asker") }).ask, pair("asker"));
+	assert.throws(() => parseModeSelections({ enabled: true, ask: { provider: "p", modelId: "m" } }));
+	const dir = fs.mkdtempSync(path.join(os.tmpdir(), "mode-selection-ask-"));
+	try {
+		fs.writeFileSync(path.join(dir, "pi-plan-build.json"), JSON.stringify({ modeSelections: { enabled: true, build: pair("builder"), ask: pair("asker") } }));
+		const ctx: any = { model: { provider: "p", id: "builder" }, modelRegistry: { find: (provider: string, id: string) => ({ provider, id }) }, ui: { notify() {} } };
+		const pi: any = { getThinkingLevel: () => "low", setThinkingLevel() {}, setModel: async (model: any) => { ctx.model = model; return true; } };
+		const selections = createModeSelections(pi, dir, () => "build");
+		selections.restore(ctx);
+		await selections.apply("ask", ctx);
+		assert.equal(ctx.model.id, "asker", "Ask routes to its own remembered model");
+		await selections.apply("build", ctx);
+		assert.equal(ctx.model.id, "builder");
+		// Enabling seeds every mode so no later switch can route to an undefined pair.
+		fs.rmSync(path.join(dir, "pi-plan-build.json"));
+		const seeded = createModeSelections(pi, dir, () => "ask");
+		seeded.restore(ctx);
+		seeded.setEnabled(true, ctx);
+		const saved = JSON.parse(fs.readFileSync(path.join(dir, "pi-plan-build.json"), "utf8")).modeSelections;
+		for (const mode of ["build", "plan", "ask"]) assert.deepEqual(saved[mode], { provider: "p", modelId: "builder", thinkingLevel: "low" }, `${mode} must be seeded on enable`);
+		seeded.dispose();
+		selections.dispose();
+	} finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
 test("queued mode changes converge on the latest destination", async () => {
 	const dir = fs.mkdtempSync(path.join(os.tmpdir(), "mode-selection-queue-"));
 	try {

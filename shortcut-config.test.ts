@@ -80,7 +80,7 @@ test("obsolete small-caps settings are ignored", () => {
 test("default startup mode parses, warns on invalid values, and saves without clobbering other settings", () => {
 	assert.equal(DEFAULT_MODE, "build");
 	assert.equal(parseShortcutConfig(undefined).defaultMode, "build");
-	for (const mode of ["build", "plan"] as const) {
+	for (const mode of ["build", "plan", "ask"] as const) {
 		const parsed = parseShortcutConfig({ defaultMode: mode });
 		assert.equal(parsed.defaultMode, mode);
 		assert.equal(parsed.warning, undefined);
@@ -88,7 +88,7 @@ test("default startup mode parses, warns on invalid values, and saves without cl
 	for (const invalid of ["Plan", "remember", true, 1, null, [], {}]) {
 		const parsed = parseShortcutConfig({ defaultMode: invalid });
 		assert.equal(parsed.defaultMode, "build", `${JSON.stringify(invalid)} must fall back to build`);
-		assert.match(parsed.warning ?? "", /defaultMode must be "build" or "plan"/);
+		assert.match(parsed.warning ?? "", /defaultMode must be "build", "plan", or "ask"/);
 	}
 	const dir = fs.mkdtempSync(path.join(os.tmpdir(), "plan-default-mode-"));
 	try {

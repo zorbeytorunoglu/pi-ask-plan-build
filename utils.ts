@@ -7,7 +7,9 @@ import { decodePlanExecution, type PlanExecutionState } from "./plan-execution.t
 import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
 import { VERIFICATION_GUIDANCE } from "./prompts.ts";
 
-export type Mode = "build" | "plan";
+/** Cycle order for the global mode shortcut: Build, Plan, then the read-only Ask mode. */
+export const MODES = ["build", "plan", "ask"] as const;
+export type Mode = (typeof MODES)[number];
 
 /** Theme color for messages that ask the user to act. */
 export const INSTRUCTION_COLOR = "accent" as const;
@@ -31,9 +33,10 @@ export function validationNotice(userAction: string): string {
 const MODE_LABELS: Record<Mode, string> = {
 	plan: "plan",
 	build: "build",
+	ask: "ask",
 };
 
-type ModeThemeColor = "warning" | "thinkingLow";
+type ModeThemeColor = "warning" | "thinkingLow" | "borderAccent";
 
 export interface ModeStatusTheme {
 	bold(text: string): string;
@@ -47,7 +50,7 @@ export interface PromptMetadataOptions {
 }
 
 function modeThemeColor(mode: Mode): ModeThemeColor {
-	return mode === "plan" ? "warning" : "thinkingLow";
+	return mode === "plan" ? "warning" : mode === "ask" ? "borderAccent" : "thinkingLow";
 }
 
 function formatModeColor(mode: Mode, text: string, theme: ModeStatusTheme): string {
@@ -232,7 +235,7 @@ export interface PersistedModeState {
 }
 
 export function isMode(value: unknown): value is Mode {
-	return value === "build" || value === "plan";
+	return MODES.includes(value as Mode);
 }
 
 export function decodeModeState(value: unknown): PersistedModeState | undefined {
@@ -452,7 +455,7 @@ export function extractPromptHistory(entries: readonly unknown[], limit = 100): 
 }
 
 export function nextMode(mode: Mode): Mode {
-	return mode === "build" ? "plan" : "build";
+	return MODES[(MODES.indexOf(mode) + 1) % MODES.length];
 }
 
 export function applyManualSelection(selectedMode: Mode, runMode: Mode | undefined, idle: boolean): {

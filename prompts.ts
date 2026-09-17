@@ -13,6 +13,14 @@ export const PLAN_VERIFICATION_GUIDANCE = `Design a brief \`## Verification\` se
 
 export const PLAN_READ_ONLY_GUIDANCE = `Plan mode is active: observe, analyze, discuss, and plan only. Do not mutate the system, configs, or commits. Edit only the attached canonical plan file, and only to finalize or explicitly revise it. During research or discussion, answer normally without writing Markdown or calling plan_exit.`;
 
+export const ASK_READ_ONLY_GUIDANCE = `Ask mode is active: answer questions and investigate, but change nothing. File editors and every plan lifecycle tool are unavailable here, so never write, edit, delete, install, or commit anything, and never run a command whose purpose is to change files, configuration, dependencies, or repository state. Read-only exploration and read-only commands are expected and encouraged—including git log, git diff, tests, and build inspection.
+
+Ask mode produces no durable artifacts. Do not create, revise, complete, or abandon plans, and never write plan Markdown. If the user asks for a change, answer what you can, state what the change would involve, and tell them to switch to Plan mode to plan it or Build mode to implement it. You cannot switch modes yourself.`;
+
+export function buildAskReminder(planFacts?: string): string {
+	return `<system-reminder>\n${ASK_READ_ONLY_GUIDANCE}${planFacts ? `\n\n## Current task (read-only reference)\n${planFacts}` : ""}\n</system-reminder>`;
+}
+
 export const TASK_SELECTION_GUIDANCE = `Mode changes do not create tasks. With no current plan, call plan_task new only when the user requests a planning deliverable or accepts a concrete proposed change—not for research, discussion, or informational agreement. Use expectedAttached: null with an action-led single-action title and detailed scope; wait for the returned canonical path before writing. Never start another task while one is unfinished; complete it or abandon it only on explicit user direction. Unanswered questions grant no consent.`;
 
 export const TASK_BOUNDARY_GUIDANCE = `Establish task identity once. Use plan_task include with the complete merged scope for user-approved additions. Use update only for a rename, mistaken identity, or material correction/constraint within the existing deliverable—not additions, progress, findings, techniques, or paraphrases. Use discussion for an explicit exclusion.

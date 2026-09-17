@@ -2,11 +2,12 @@ import fs from "node:fs";
 import path from "node:path";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { saveSettings, SHORTCUT_CONFIG_FILE } from "./shortcut-config.ts";
-import type { Mode } from "./utils.ts";
+import { MODES, type Mode } from "./utils.ts";
 
 type Thinking = ReturnType<ExtensionAPI["getThinkingLevel"]>;
 export interface ModeSelection { provider: string; modelId: string; thinkingLevel: Thinking }
-export interface ModeSelections { enabled: boolean; plan?: ModeSelection; build?: ModeSelection }
+export interface ModeSelectable { plan?: ModeSelection; build?: ModeSelection; ask?: ModeSelection }
+export interface ModeSelections extends ModeSelectable { enabled: boolean }
 const levels = new Set(["off", "minimal", "low", "medium", "high", "xhigh", "max"]);
 export function parseModeSelections(value: unknown): ModeSelections {
 	if (value === undefined) return { enabled: false };
@@ -14,7 +15,7 @@ export function parseModeSelections(value: unknown): ModeSelections {
 	const raw = value as Record<string, unknown>;
 	if (typeof raw.enabled !== "boolean") throw new Error("modeSelections.enabled must be a boolean");
 	const result: ModeSelections = { enabled: raw.enabled };
-	for (const mode of ["plan", "build"] as const) {
+	for (const mode of MODES) {
 		if (raw[mode] === undefined) continue;
 		const pair = raw[mode] as ModeSelection;
 		if (!pair || typeof pair.provider !== "string" || !pair.provider.trim() || typeof pair.modelId !== "string" || !pair.modelId.trim() || !levels.has(pair.thinkingLevel)) throw new Error(`Invalid modeSelections.${mode}`);
@@ -44,7 +45,8 @@ export function createModeSelections(pi: ExtensionAPI, agentDir: string, effecti
 		saveSettings(agentDir, document => {
 			const latest = parseModeSelections(document.modeSelections); // Never erase malformed settings.
 			merged = { ...latest };
-			for (const key of ["enabled", "plan", "build"] as const) {
+			const keys: Array<keyof ModeSelections> = ["enabled", ...MODES];
+			for (const key of keys) {
 				if (JSON.stringify(config[key]) !== JSON.stringify(next[key])) Object.assign(merged, { [key]: next[key] });
 			}
 			return { ...document, modeSelections: merged };
@@ -68,7 +70,11 @@ export function createModeSelections(pi: ExtensionAPI, agentDir: string, effecti
 		setEnabled(enabled: boolean, ctx: ExtensionContext) {
 			generation++;
 			const pair = capture(ctx);
-			save(enabled && pair ? { ...config, enabled, [effectiveMode()]: pair, [effectiveMode() === "plan" ? "build" : "plan"]: config[effectiveMode() === "plan" ? "build" : "plan"] ?? pair } : { ...config, enabled });
+			if (!enabled || !pair) { save({ ...config, enabled }); current = pair; return; }
+			// Enabling seeds every mode so a later switch never routes to an undefined pair.
+			const next: ModeSelections = { ...config, enabled, [effectiveMode()]: pair };
+			for (const mode of MODES) if (!next[mode]) next[mode] = pair;
+			save(next);
 			current = pair;
 		},
 		changed(ctx: ExtensionContext, restore = false) {

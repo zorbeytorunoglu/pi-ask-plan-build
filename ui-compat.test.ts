@@ -228,11 +228,12 @@ test("registers default Alt+M without taking Pi's Shift+Tab thinking shortcut", 
 	assert.equal(harness.shortcuts.has("shift+tab"), false);
 });
 
-test("default Tab and Alt+M toggle modes while an open menu retains completion", { timeout: 5000 }, async () => {
+test("default Tab and Alt+M cycle modes while an open menu retains completion", { timeout: 5000 }, async () => {
 	const harness = createHarness();
 	await start(harness);
 	await toggle(harness, "\t", "plan");
-	await toggle(harness, "\x1bm", "build");
+	await toggle(harness, "\x1bm", "ask");
+	await toggle(harness, "\t", "build");
 
 	const editor = harness.editor();
 	editor.setAutocompleteProvider(new CombinedAutocompleteProvider([{ name: "plan" }, { name: "plant" }], agentDir));
@@ -259,7 +260,8 @@ test("custom global and editor shortcuts dispatch, while old bindings are absent
 	await start(harness);
 	assert.deepEqual([...harness.shortcuts.keys()], ["ctrl+alt+m"]);
 	await toggle(harness, "\x1b\r", "plan");
-	await toggle(harness, "\x1b[17~", "build");
+	await toggle(harness, "\x1b[17~", "ask");
+	await toggle(harness, "\x1b\r", "build");
 	await completeFile(harness);
 });
 
@@ -338,7 +340,7 @@ test("settings group shortcut presets in a submenu, retain active bindings until
 	await start(harness);
 	harness.selectOptions("Shortcuts (active: Tab + Alt+M)", "Alt+M only");
 	await harness.commands.get("plan-settings").handler("", harness.ctx);
-	assert.equal(harness.selections[0]!.title, "Plan/Build settings");
+	assert.equal(harness.selections[0]!.title, "Plan/Build/Ask settings");
 	for (const option of ["Default mode (active: build)", "Shortcuts (active: Tab + Alt+M)", "Plan title (active: on)", "Question tool (active: on)", "Per-mode model/thinking (active: off)"]) {
 		assert.ok(harness.selections[0]!.options.includes(option));
 	}

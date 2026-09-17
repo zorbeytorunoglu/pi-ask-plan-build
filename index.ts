@@ -132,6 +132,8 @@ export default function planBuildModes(pi: ExtensionAPI): void {
 	let savedPlanState: "saved" | "absent" | "unavailable" = "absent";
 	let savedPlanHeading: string | undefined;
 	let toolsBeforeModes: string[] = [];
+	// Names Ask removed from the active set; restored when another mode is applied.
+	let askSuppressed: string[] = [];
 	// Pi cannot unregister tools, so the questionTool setting is fixed for the lifetime of this load.
 	const questionToolEnabled = configuredQuestionTool;
 	const managedTools = managedToolsFor(questionToolEnabled);
@@ -165,6 +167,12 @@ export default function planBuildModes(pi: ExtensionAPI): void {
 
 	pi.registerFlag("build", {
 		description: "Start in Build mode",
+		type: "boolean",
+		default: false,
+	});
+
+	pi.registerFlag("ask", {
+		description: "Start in read-only Ask mode",
 		type: "boolean",
 		default: false,
 	});
@@ -278,13 +286,24 @@ export default function planBuildModes(pi: ExtensionAPI): void {
 	function discoverUnmanagedTools(): void {
 		// Plan Build owns only its lifecycle tools. Re-read the live host set so
 		// another extension's additions and removals both survive mode refreshes.
-		toolsBeforeModes = pi.getActiveTools().filter((name) => !managedTools.has(name));
+		const live = pi.getActiveTools().filter((name) => !managedTools.has(name));
+		// Ask removes mutators from the live set; those removals are this extension's own
+		// and must not be read back as host removals while Ask stays active.
+		toolsBeforeModes = unique([...live, ...askSuppressed.filter((name) => !live.includes(name))]);
 	}
 
 	function applyTools(mode: Mode): void {
 		discoverUnmanagedTools();
-		const base = [...toolsBeforeModes];
 		const questionTools = questionToolEnabled ? ["question"] : [];
+		if (mode === "ask") {
+			// Ask is the only mode that removes host tools. Remember exactly which names it
+			// removed so leaving Ask restores them instead of treating them as host removals.
+			askSuppressed = toolsBeforeModes.filter((name) => isFileMutationTool(name));
+			pi.setActiveTools(unique([...toolsBeforeModes.filter((name) => !isFileMutationTool(name)), ...questionTools]));
+			return;
+		}
+		askSuppressed = [];
+		const base = [...toolsBeforeModes];
 		if (mode === "plan") {
 			pi.setActiveTools(unique([...base, ...questionTools, "plan_exit", "plan_task"]));
 		} else {
@@ -491,8 +510,12 @@ export default function planBuildModes(pi: ExtensionAPI): void {
 		description: "Switch to Build mode",
 		handler: async (_args, ctx) => selectMode("build", ctx, "manual"),
 	});
+	pi.registerCommand("ask", {
+		description: "Switch to read-only Ask mode",
+		handler: async (_args, ctx) => selectMode("ask", ctx, "manual"),
+	});
 	pi.registerCommand("plan-settings", {
-		description: "Configure Plan/Build settings",
+		description: "Configure Plan/Build/Ask settings",
 		handler: async (_args, ctx) => {
 			if (!ctx.hasUI) return;
 			const customOption = "Custom (edit config file)";
@@ -501,16 +524,17 @@ export default function planBuildModes(pi: ExtensionAPI): void {
 			const modelOption = `Per-mode model/thinking (active: ${modeSelections.enabled ? "on" : "off"})`;
 			const titleOption = `Plan title (active: ${composerSettings.showPlanTitle ? "on" : "off"})`;
 			const questionOption = `Question tool (active: ${questionToolEnabled ? "on" : "off"})`;
-			const selected = await ctx.ui.select("Plan/Build settings", [defaultModeOption, shortcutOption, titleOption, questionOption, modelOption]);
+			const selected = await ctx.ui.select("Plan/Build/Ask settings", [defaultModeOption, shortcutOption, titleOption, questionOption, modelOption]);
 			if (!selected) return;
 			if (selected === defaultModeOption) {
-				const choice = await ctx.ui.select("Default mode for new sessions", ["Build (default)", "Plan"]);
+				const choices: Array<[string, Mode]> = [["Build (default)", "build"], ["Plan", "plan"], ["Ask (read-only)", "ask"]];
+				const choice = await ctx.ui.select("Default mode for new sessions", choices.map(([label]) => label));
 				if (!choice) return;
 				try {
-					const mode: Mode = choice === "Plan" ? "plan" : "build";
+					const mode: Mode = choices.find(([label]) => label === choice)?.[1] ?? "build";
 					saveDefaultMode(shortcutAgentDir, mode);
 					defaultMode = mode;
-					ctx.ui.notify(`New sessions start in ${mode === "plan" ? "Plan" : "Build"} mode. The current session is unchanged.`, "info");
+					ctx.ui.notify(`New sessions start in ${mode === "plan" ? "Plan" : mode === "ask" ? "Ask" : "Build"} mode. The current session is unchanged.`, "info");
 				} catch (error) {
 					ctx.ui.notify(`Could not save ${shortcutConfigPath}: ${error instanceof Error ? error.message : String(error)}`, "error");
 				}
@@ -518,7 +542,7 @@ export default function planBuildModes(pi: ExtensionAPI): void {
 			}
 			if (selected === modelOption) {
 				if (!ctx.isIdle() || pendingMode !== undefined) { ctx.ui.notify("Wait for the agent and mode switch to finish before changing model routing.", "warning"); return; }
-				const choice = await ctx.ui.select("Remember separate Plan and Build model/thinking selections", ["Off (default)", "On"]);
+				const choice = await ctx.ui.select("Remember separate Plan, Build, and Ask model/thinking selections", ["Off (default)", "On"]);
 				if (!choice) return;
 				try { modeSelections.setEnabled(choice === "On", ctx); ctx.ui.notify(`Per-mode model/thinking ${choice === "On" ? "on" : "off"}. Use Pi's normal model and thinking controls in each mode.`, "info"); }
 				catch (error) { ctx.ui.notify(`Could not save model settings: ${String(error)}`, "error"); }
@@ -1123,6 +1147,22 @@ export default function planBuildModes(pi: ExtensionAPI): void {
 				reason: "Agent action blocked: implementation is waiting for your instruction.",
 			};
 		}
+		if (effectiveMode === "ask") {
+			// Ask removes these tools from the active set; this guard still covers a host or
+			// another extension re-enabling one mid-run.
+			if (isFileMutationTool(event.toolName)) {
+				return {
+					block: true,
+					reason: `Agent action blocked: Ask mode is read-only, so ${event.toolName} cannot modify files. Switch to Plan mode to plan the change or Build mode to make it.`,
+				};
+			}
+			if (managedTools.has(event.toolName) && event.toolName !== "question") {
+				return {
+					block: true,
+					reason: "Agent action blocked: Ask mode has no plan lifecycle. Switch to Plan mode to create or revise a plan, or Build mode to record implementation work.",
+				};
+			}
+		}
 		if (effectiveMode !== "plan" || !isFileMutationTool(event.toolName)) return;
 		const inputPath = mutationPath(event.input);
 		if (plans.collection.attached !== null && inputPath !== undefined && isAllowedPlanMutation(ctx.cwd, inputPath, currentPlanPath())) return;
@@ -1273,8 +1313,8 @@ export default function planBuildModes(pi: ExtensionAPI): void {
 		const decoded = decodeModeState(raw);
 		pendingFreshAnnouncement = raw?.pendingFreshAnnouncement === true;
 		pendingValidationNotice = undefined;
-		const flagMode: Mode | undefined = pi.getFlag("plan") === true ? "plan" : pi.getFlag("build") === true ? "build" : undefined;
-		// Startup mode priority: session branch record > CLI flag (--plan / --build) > defaultMode setting > Build.
+		const flagMode: Mode | undefined = pi.getFlag("plan") === true ? "plan" : pi.getFlag("build") === true ? "build" : pi.getFlag("ask") === true ? "ask" : undefined;
+		// Startup mode priority: session branch record > CLI flag (--plan / --build / --ask) > defaultMode setting > Build.
 		selectedMode = decoded?.selectedMode ?? flagMode ?? defaultMode ?? "build";
 		restoreUserMessageRails(ctx.sessionManager.getBranch());
 		// Persisted snapshots describe an older runtime and must not override tool

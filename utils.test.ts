@@ -25,6 +25,7 @@ import {
 	buildPlanReviewMessage,
 	classifyPlanExitChoice,
 	decodeModeState,
+	isMode,
 	decodePlanCollection,
 	decodePlanLifecycle,
 	displayedPlanTitle,
@@ -198,7 +199,12 @@ test("manual changes defer run mode while busy", () => {
 	assert.deepEqual(applyManualSelection("plan", "build", false), { selectedMode: "plan", runMode: "build" });
 	assert.deepEqual(applyManualSelection("plan", undefined, true), { selectedMode: "plan", runMode: "plan" });
 	assert.equal(nextMode("build"), "plan");
-	assert.equal(nextMode("plan"), "build");
+	assert.equal(nextMode("plan"), "ask");
+	assert.equal(nextMode("ask"), "build");
+	assert.equal(isMode("ask"), true);
+	assert.equal(isMode("review"), false);
+	assert.deepEqual(decodeModeState({ version: 1, selectedMode: "ask" }), { version: 1, selectedMode: "ask" });
+	assert.equal(decodeModeState({ version: 1, selectedMode: "review" }), undefined);
 });
 
 test("mode composer uses colored rails and mode/thinking metadata", () => {
@@ -206,11 +212,12 @@ test("mode composer uses colored rails and mode/thinking metadata", () => {
 		bold(text: string) {
 			return `\x1b[1m${text}\x1b[22m`;
 		},
-		fg(color: "dim" | "warning" | "thinkingLow", text: string) {
+		fg(color: "dim" | "warning" | "thinkingLow" | "borderAccent", text: string) {
 			const rgb = {
 				dim: "128;128;128",
 				warning: "245;167;66",
 				thinkingLow: "92;156;245",
+				borderAccent: "0;255;255",
 			}[color];
 			return `\x1b[38;2;${rgb}m${text}\x1b[39m`;
 		},
@@ -220,6 +227,7 @@ test("mode composer uses colored rails and mode/thinking metadata", () => {
 	const buildRail = formatModeRail("build", theme);
 	assert.equal(planRail, "\x1b[38;2;245;167;66m│\x1b[39m");
 	assert.equal(buildRail, "\x1b[38;2;92;156;245m│\x1b[39m");
+	assert.equal(formatModeRail("ask", theme), "\x1b[38;2;0;255;255m│\x1b[39m");
 	assert.equal(formatModeRail("plan", theme, "┆"), "\x1b[38;2;245;167;66m┆\x1b[39m");
 	assert.equal(formatModeRail("build", theme, "┇"), "\x1b[38;2;92;156;245m┇\x1b[39m");
 	assert.equal(formatModeRail("plan", theme, "┃"), "\x1b[38;2;245;167;66m┃\x1b[39m");
@@ -240,6 +248,10 @@ test("mode composer uses colored rails and mode/thinking metadata", () => {
 			rail: formatModeRail("build", theme, "┇"),
 		}),
 		"\x1b[38;2;92;156;245m┇\x1b[39m \x1b[38;2;92;156;245m\x1b[1mbuild\x1b[22m\x1b[39m\x1b[38;2;128;128;128m · \x1b[39mgpt-5.6-sol\x1b[38;2;128;128;128m [openai]\x1b[39m\x1b[38;2;128;128;128m · \x1b[39m\x1b[38;2;0;255;0mmedium\x1b[39m",
+	);
+	assert.equal(
+		formatModeMetadata("ask", "medium", theme, thinkingColor),
+		"\x1b[38;2;0;255;255m│\x1b[39m \x1b[38;2;0;255;255m\x1b[1mask\x1b[22m\x1b[39m\x1b[38;2;128;128;128m · \x1b[39m\x1b[38;2;0;255;0mmedium\x1b[39m",
 	);
 });
 
