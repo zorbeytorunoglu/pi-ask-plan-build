@@ -1,8 +1,8 @@
-# Pi Plan & Build
+# Pi Ask, Plan & Build
 
 **Ask or plan safely, approve explicitly, then implement here or in a clean session.**
 
-A [Pi coding agent](https://github.com/earendil-works/pi-mono) extension that separates planning from implementation without making every small fix a formal project.
+A [Pi coding agent](https://github.com/earendil-works/pi-mono) extension that separates planning from implementation without making every small fix a formal project. This is the `pi-ask-plan-build` fork of [`@janvitos/pi-plan-build`](https://github.com/janvitos/pi-plan-build) v0.1.105, adding the read-only Ask mode.
 
 - Persistent **Ask/Plan/Build** modes and one current unfinished plan.
 - **Ask** answers questions read-only: file mutators and plan lifecycle tools are removed from the active set, so it cannot change code or plan files.
@@ -16,9 +16,9 @@ A [Pi coding agent](https://github.com/earendil-works/pi-mono) extension that se
 Requires **Pi 0.84.2+** and a **TUI or RPC client** for interactive questions and approval.
 
 ```bash
-pi install npm:@janvitos/pi-plan-build
+pi install npm:@zorbeytorunoglu/pi-ask-plan-build
 # Or:
-pi install git:github.com/janvitos/pi-plan-build
+pi install git:github.com/zorbeytorunoglu/pi-ask-plan-build
 ```
 
 Restart Pi or run `/reload`. Do not load multiple npm/Git/local copies simultaneously.
@@ -123,5 +123,7 @@ The optional sidebar needs fullscreen TUI and at least **132 columns**. Step exe
 ## Attribution and license
 
 Independent of Pi and OpenCode. Conversational read-only planning follows OpenCode's Plan agent; persisted finalization/approval are Pi adaptations. Earlier semantics were informed by OpenCode 1.18.16 and clean-session handoffs by the former `pi-plan-mode` extension. No bundled subagents are required.
+
+This fork is derived from [`@janvitos/pi-plan-build`](https://github.com/janvitos/pi-plan-build) v0.1.105 and retains its MIT copyright notice. Ask mode is the fork's own addition. Persistence keeps its original internal names—the configuration file remains `pi-plan-build.json` and session entry types remain `pi-plan-build-*`—so existing settings and session history continue to work.
 
 [MIT](LICENSE)

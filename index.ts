@@ -1113,7 +1113,7 @@ export default function planBuildModes(pi: ExtensionAPI): void {
 		const inputPath = mutationPath(event.input);
 		const targetsTrackedPlan = inputPath !== undefined && plans.collection.records.some((r) =>
 			isAllowedPlanMutation(ctx.cwd, inputPath, planPathFor(r.plan.sequence, ctx)));
-		// A pathless editor is opaque to Pi Plan Build, but a successful call is
+		// A pathless editor is opaque to Pi Ask Plan Build, but a successful call is
 		// still enough evidence that ordinary Build work may need reconciliation.
 		if (!targetsTrackedPlan) armReconciliation(ctx);
 		if (inputPath === undefined || isAllowedPlanMutation(ctx.cwd, inputPath, currentPlanPath())) {
@@ -1305,7 +1305,7 @@ export default function planBuildModes(pi: ExtensionAPI): void {
 		if (shortcutConfigWarning && !shortcutConfigWarningShown && ctx.hasUI) {
 			shortcutConfigWarningShown = true;
 			ctx.ui.notify(
-				`Invalid Pi Plan Build configuration at ${shortcutConfigPath}: ${shortcutConfigWarning}. Defaults were used for invalid settings.`,
+				`Invalid Pi Ask Plan Build configuration at ${shortcutConfigPath}: ${shortcutConfigWarning}. Defaults were used for invalid settings.`,
 				"warning",
 			);
 		}

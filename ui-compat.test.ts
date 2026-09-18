@@ -424,7 +424,7 @@ test("model-facing tool metadata keeps schemas stable and prompt overhead bounde
 	assert.deepEqual(harness.registeredTools.get("plan_step_control").parameters.properties.action.anyOf.map((item: any) => item.const), ["start", "complete", "skip", "revise", "pause", "resume", "cancel", "hide", "show"]);
 });
 
-test("an editor installed before Pi Plan Build triggers reduced optional UI", async () => {
+test("an editor installed before Pi Ask Plan Build triggers reduced optional UI", async () => {
 	const otherEditor = () => undefined;
 	const harness = createHarness(otherEditor);
 	await start(harness);
@@ -440,7 +440,7 @@ test("an editor installed before Pi Plan Build triggers reduced optional UI", as
 	assert.deepEqual(harness.editorCalls, []);
 });
 
-test("a later decorator that invokes Pi Plan Build's editor retains full optional UI", async () => {
+test("a later decorator that invokes Pi Ask Plan Build's editor retains full optional UI", async () => {
 	const harness = createHarness();
 	await start(harness);
 	assert.equal(typeof harness.editorCalls[0], "function");

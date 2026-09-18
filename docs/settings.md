@@ -44,7 +44,7 @@ Manual mode changes during a run defer automatic model switching until that run 
 
 ## Question tool
 
-Pi Plan Build provides the structured `question` tool. It is **on by default**; choose **Question tool → Off** in `/plan-settings`, or set it directly:
+Pi Ask Plan Build provides the structured `question` tool. It is **on by default**; choose **Question tool → Off** in `/plan-settings`, or set it directly:
 
 ```json
 {
@@ -62,7 +62,7 @@ The cancelled-question notice renderer stays registered either way, so entries r
 
 `/plan-settings` groups **Tab + Alt+M**, **Alt+M only**, **Disabled**, and **Custom (edit config file)** under the **Shortcuts** submenu. The main menu also offers **Default mode**, **Plan title**, **Question tool**, and **Per-mode model/thinking**. Saving preserves unrelated settings; cancellation changes nothing. Malformed JSON is never overwritten. Shortcut changes require `/reload`; the question tool is read at load time, so `/plan-settings` saves it and asks for `/reload`; default mode, title, and per-mode selection changes apply without reloading. Direct file edits require `/reload`.
 
-Pi Plan Build reads `~/.pi/agent/pi-plan-build.json` (or `$PI_CODING_AGENT_DIR/pi-plan-build.json`):
+Pi Ask Plan Build reads `~/.pi/agent/pi-plan-build.json` (or `$PI_CODING_AGENT_DIR/pi-plan-build.json`). The fork keeps that original filename so existing settings keep working:
 
 ```json
 {
